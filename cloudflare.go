@@ -100,10 +100,14 @@ func (api *API) ZoneIDByName(zoneName string) (string, error) {
 // makeRequest makes a HTTP request and returns the body as a byte slice,
 // closing it before returnng. params will be serialized to JSON.
 func (api *API) makeRequest(method, uri string, params interface{}) ([]byte, error) {
-	return api.makeRequestWithAuthType(method, uri, params, api.authType)
+	return api.makeRequestWithAuthType(context.TODO(), method, uri, params, api.authType)
 }
 
-func (api *API) makeRequestWithAuthType(method, uri string, params interface{}, authType int) ([]byte, error) {
+func (api *API) makeRequestContext(ctx context.Context, method, uri string, params interface{}) ([]byte, error) {
+	return api.makeRequestWithAuthType(ctx, method, uri, params, api.authType)
+}
+
+func (api *API) makeRequestWithAuthType(ctx context.Context, method, uri string, params interface{}, authType int) ([]byte, error) {
 	// Replace nil with a JSON object if needed
 	var jsonBody []byte
 	var err error
@@ -146,7 +150,7 @@ func (api *API) makeRequestWithAuthType(method, uri string, params interface{}, 
 		if err != nil {
 			return nil, errors.Wrap(err, "Error caused by request rate limiting")
 		}
-		resp, respErr = api.request(method, uri, reqBody, authType)
+		resp, respErr = api.request(ctx, method, uri, reqBody, authType)
 
 		// retry if the server is rate limiting us or if it failed
 		// assumes server operations are rolled back on failure
@@ -205,11 +209,12 @@ func (api *API) makeRequestWithAuthType(method, uri string, params interface{}, 
 // request makes a HTTP request to the given API endpoint, returning the raw
 // *http.Response, or an error if one occurred. The caller is responsible for
 // closing the response body.
-func (api *API) request(method, uri string, reqBody io.Reader, authType int) (*http.Response, error) {
+func (api *API) request(ctx context.Context, method, uri string, reqBody io.Reader, authType int) (*http.Response, error) {
 	req, err := http.NewRequest(method, api.BaseURL+uri, reqBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "HTTP request creation failed")
 	}
+	req.WithContext(ctx)
 
 	// Apply any user-defined headers first.
 	req.Header = cloneHeader(api.headers)
